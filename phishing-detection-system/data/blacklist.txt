@@ -1,0 +1,26 @@
+# Known phishing domains – one per line
+paypal-secure-login.com
+paypa1.com
+appleid-verify.com
+secure-bankofamerica.com
+amazon-security-alert.com
+facebook-login-verify.com
+google-account-recovery.net
+microsoft-support-alert.com
+netflix-billing-update.com
+instagram-verify-account.com
+known-phishing-site.com
+login-paypal.com
+secure-login-amazon.com
+bankofamerica-verify.net
+wellsfargo-secure.com
+chase-alert-security.com
+irs-tax-refund.com
+dhl-package-tracking.net
+fedex-delivery-alert.com
+crypto-wallet-verify.com
+binance-secure-login.net
+coinbase-alert.com
+steam-free-items.com
+roblox-free-robux.com
+paypa1-login.com
