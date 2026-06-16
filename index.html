@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PhishGuard — Phishing Detection System</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050c1a;--surface:#080f20;--card:rgba(255,255,255,0.03);
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.12);
+  --cyan:#00d4ff;--purple:#7c6af7;
+  --green:#00ff88;--green2:#00cc6a;
+  --yellow:#ffd60a;--yellow2:#e6b800;
+  --red:#ff4757;--red2:#cc2244;
+  --text:#e8f0fe;--muted:#4a6080;--muted2:#6a8aaa;
+  --r:16px;--r2:12px;--r3:8px;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Inter',system-ui,sans-serif;
+  min-height:100vh;overflow-x:hidden;
+}
+#canvas{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.45}
+.grid-overlay{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
+  background-size:52px 52px;
+}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div class="grid-overlay"></div>
+
+<style>
+/* NAVBAR */
+.navbar{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:60px;
+  background:rgba(5,12,26,0.85);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(0,212,255,0.1);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 clamp(16px,4vw,40px);
+}
+.navbar-brand{display:flex;align-items:center;gap:10px}
+.navbar-brand svg{flex-shrink:0}
+.navbar-name{font-size:1.1rem;font-weight:800;letter-spacing:.5px;
+  background:linear-gradient(135deg,var(--cyan),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.navbar-right{display:flex;align-items:center;gap:12px}
+.live-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.25);
+  border-radius:999px;padding:4px 12px;font-size:.7rem;color:var(--green);
+  font-weight:700;letter-spacing:.8px;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:livePulse 1.5s ease infinite}
+.version-tag{
+  font-size:.68rem;font-weight:600;color:var(--muted2);
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:6px;padding:3px 9px;letter-spacing:.5px;
+}
+/* WRAPPER */
+.wrapper{position:relative;z-index:1;max-width:920px;margin:0 auto;padding:96px 20px 100px}
+/* TOAST */
+#toastBox{position:fixed;top:72px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.toast{
+  background:rgba(13,21,40,0.95);border:1px solid var(--border2);border-radius:var(--r3);
+  padding:13px 18px;font-size:.84rem;color:var(--text);
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+  animation:toastIn .35s cubic-bezier(.4,0,.2,1) both;
+  min-width:240px;max-width:340px;display:flex;align-items:center;gap:10px;
+  pointer-events:auto;backdrop-filter:blur(12px);
+}
+.toast.hide{animation:toastOut .3s ease both}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.toast.ok .toast-dot{background:var(--green);box-shadow:0 0 8px rgba(0,255,136,.5)}
+.toast.warn .toast-dot{background:var(--yellow);box-shadow:0 0 8px rgba(255,214,10,.5)}
+.toast.err .toast-dot{background:var(--red);box-shadow:0 0 8px rgba(255,71,87,.5)}
+/* HERO */
+header{text-align:center;margin-bottom:44px;animation:fadeDown .7s ease both;padding-top:8px}
+.logo-wrap{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:96px;height:96px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,212,255,.12),transparent 70%);
+  margin-bottom:16px;position:relative;
+}
+.logo-ring{
+  position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid transparent;
+  background:linear-gradient(var(--bg),var(--bg)) padding-box,
+             linear-gradient(135deg,var(--cyan),var(--purple)) border-box;
+  animation:spin 8s linear infinite;
+}
+.logo-ring2{
+  position:absolute;inset:-12px;border-radius:50%;
+  border:1px solid rgba(0,212,255,.1);
+  animation:spin 14s linear infinite reverse;
+}
+.logo-ring3{
+  position:absolute;inset:-22px;border-radius:50%;
+  border:1px solid rgba(124,106,247,.06);
+  animation:spin 20s linear infinite;
+}
+.shield-svg{z-index:1;animation:pulse 3s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(0,212,255,.4))}
+header h1{
+  font-size:clamp(2rem,5vw,3.2rem);font-weight:900;letter-spacing:.5px;
+  background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 50%,var(--cyan) 100%);
+  background-size:300%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;animation:shimmer 5s linear infinite;
+}
+.header-sub{color:var(--muted2);margin-top:10px;font-size:.95rem;
+  display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.hdot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.15)}
+</style>
+
+<style>
+/* STATS */
+.stats-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+  margin-bottom:28px;animation:fadeUp .6s .1s ease both;
+}
+.stat-card{
+  background:rgba(255,255,255,.03);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.08);border-radius:var(--r);
+  box-shadow:0 8px 32px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.05);
+  padding:18px 16px;text-align:center;position:relative;overflow:hidden;
+  transition:transform .2s,box-shadow .25s,border-color .25s;
+}
+.stat-card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 16px 48px rgba(0,0,0,.5),0 0 20px rgba(0,212,255,.06);
+  border-color:rgba(0,212,255,.15);
+}
+.stat-card::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,transparent 60%,rgba(0,212,255,.03));
+  pointer-events:none;
+}
+.stat-num{
+  font-size:2rem;font-weight:900;
+  background:linear-gradient(135deg,var(--cyan),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:block;line-height:1;
+}
+.stat-num.rn{background:linear-gradient(135deg,var(--red),#ff8844);-webkit-background-clip:text;background-clip:text}
+.stat-num.gn{background:linear-gradient(135deg,var(--green),#00aaee);-webkit-background-clip:text;background-clip:text}
+.stat-lbl{font-size:.65rem;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);margin-top:7px}
+/* SCAN CARD */
+.input-card{
+  background:rgba(255,255,255,.03);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.08);border-radius:var(--r);
+  box-shadow:0 8px 32px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.05);
+  padding:28px 26px;margin-bottom:24px;position:relative;overflow:hidden;
+  animation:fadeUp .6s .2s ease both;
+}
+.input-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),var(--purple),var(--cyan),transparent);
+  animation:sweep 4s linear infinite;
+}
+.input-card::after{
+  content:'';position:absolute;bottom:-60px;right:-60px;
+  width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle,rgba(124,106,247,.06),transparent 70%);
+  pointer-events:none;
+}
+.input-lbl{
+  font-size:.7rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:16px;display:flex;align-items:center;gap:8px;
+}
+.input-lbl::before{content:'';display:block;width:3px;height:14px;background:var(--cyan);border-radius:2px;flex-shrink:0}
+.input-row{display:flex;gap:10px;flex-wrap:wrap}
+.input-wrap{flex:1;position:relative;min-width:200px}
+.input-icon{
+  position:absolute;left:16px;top:50%;transform:translateY(-50%);
+  font-size:15px;pointer-events:none;opacity:.45;
+}
+#urlInput{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:1.5px solid rgba(255,255,255,.1);
+  border-radius:var(--r2);padding:15px 20px 15px 48px;
+  color:var(--text);font-size:.97rem;outline:none;font-family:'Inter',sans-serif;
+  transition:border-color .25s,box-shadow .25s,background .2s;
+}
+#urlInput::placeholder{color:var(--muted)}
+#urlInput:focus{
+  border-color:var(--cyan);
+  box-shadow:0 0 0 3px rgba(0,212,255,.1),inset 0 0 20px rgba(0,212,255,.03);
+  background:rgba(0,212,255,.03);
+}
+#urlInput.shake{animation:shake .4s ease}
+#scanBtn{
+  background:linear-gradient(135deg,var(--cyan),var(--purple));border:none;
+  border-radius:var(--r2);padding:15px 30px;color:#fff;
+  font-size:.94rem;font-weight:700;cursor:pointer;letter-spacing:.5px;white-space:nowrap;
+  font-family:'Inter',sans-serif;
+  position:relative;overflow:hidden;transition:transform .15s,box-shadow .2s,opacity .2s;
+}
+#scanBtn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.18),transparent);opacity:0;transition:opacity .2s}
+#scanBtn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,212,255,.4)}
+#scanBtn:hover::before{opacity:1}
+#scanBtn:active{transform:none}
+#scanBtn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+#clearBtn{
+  background:transparent;border:1.5px solid rgba(255,255,255,.1);border-radius:var(--r2);
+  padding:15px 20px;color:var(--muted2);cursor:pointer;font-size:.9rem;
+  font-family:'Inter',sans-serif;
+  transition:color .2s,border-color .2s,background .2s;white-space:nowrap;
+}
+#clearBtn:hover{color:var(--red);border-color:rgba(255,71,87,.4);background:rgba(255,71,87,.06)}
+/* PROGRESS */
+.progress-wrap{margin-top:18px;display:none}
+.progress-wrap.active{display:block}
+.progress-top{display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted2);margin-bottom:8px}
+.progress-track{height:4px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden}
+.progress-fill{
+  height:100%;width:0;border-radius:999px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple));
+  transition:width .35s ease;
+  box-shadow:0 0 12px rgba(0,212,255,.5);
+}
+.scan-steps{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+.step-pill{
+  font-size:.71rem;padding:5px 13px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.07);color:var(--muted);
+  background:rgba(255,255,255,.02);transition:all .3s;
+}
+.step-pill.active{
+  border-color:var(--cyan);color:var(--cyan);
+  background:rgba(0,212,255,.08);
+  box-shadow:0 0 14px rgba(0,212,255,.25);
+}
+.step-pill.done{
+  border-color:rgba(0,255,136,.3);color:var(--green);
+  background:rgba(0,255,136,.06);
+}
+</style>
+
+<style>
+/* RESULTS */
+#results{display:none;animation:fadeUp .5s ease both}
+.verdict-banner{
+  border-radius:var(--r) var(--r) 0 0;padding:26px 28px;
+  position:relative;overflow:hidden;
+  border:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;
+}
+.verdict-banner::before{content:'';position:absolute;inset:0;pointer-events:none}
+.verdict-banner.safe{
+  background:linear-gradient(135deg,rgba(0,255,136,.06),rgba(0,180,80,.03));
+  border-color:rgba(0,255,136,.22);
+}
+.verdict-banner.suspicious{
+  background:linear-gradient(135deg,rgba(255,214,10,.07),rgba(255,150,0,.03));
+  border-color:rgba(255,214,10,.22);
+}
+.verdict-banner.dangerous{
+  background:linear-gradient(135deg,rgba(255,71,87,.08),rgba(200,20,50,.04));
+  border-color:rgba(255,71,87,.28);
+  animation:dangerBorderPulse 2.2s ease infinite;
+}
+.verdict-left{display:flex;flex-direction:column;gap:7px;flex:1;min-width:0}
+.verdict-label{font-size:.66rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted2)}
+.verdict-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:900;letter-spacing:.5px}
+.verdict-title.safe{color:var(--green);text-shadow:0 0 30px rgba(0,255,136,.35)}
+.verdict-title.suspicious{color:var(--yellow);text-shadow:0 0 30px rgba(255,214,10,.35)}
+.verdict-title.dangerous{color:var(--red);text-shadow:0 0 30px rgba(255,71,87,.45)}
+.verdict-url{font-size:.8rem;color:var(--muted2);word-break:break-all;max-width:500px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.verdict-url-text{color:var(--cyan);font-weight:500}
+.copy-btn{
+  background:none;border:1px solid rgba(0,212,255,.2);border-radius:6px;
+  color:var(--cyan);font-size:.68rem;padding:3px 10px;cursor:pointer;
+  font-family:'Inter',sans-serif;transition:all .2s;white-space:nowrap;
+}
+.copy-btn:hover{background:rgba(0,212,255,.08);border-color:var(--cyan)}
+/* SCORE RING */
+.verdict-score-circle{
+  width:92px;height:92px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;flex-shrink:0;
+}
+.score-ring-svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.score-ring-bg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:5}
+.score-ring-fill{fill:none;stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)}
+.score-ring-fill.safe{stroke:var(--green);filter:drop-shadow(0 0 4px rgba(0,255,136,.5))}
+.score-ring-fill.suspicious{stroke:var(--yellow);filter:drop-shadow(0 0 4px rgba(255,214,10,.5))}
+.score-ring-fill.dangerous{stroke:var(--red);filter:drop-shadow(0 0 4px rgba(255,71,87,.5))}
+.score-inner-num{font-size:1.45rem;font-weight:900;z-index:1;line-height:1}
+.score-inner-lbl{font-size:.5rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);z-index:1}
+/* CHECKS TABLE */
+.checks-wrap{
+  background:rgba(255,255,255,.02);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.08);border-top:none;
+}
+.check-row{
+  display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:16px;
+  padding:15px 24px;border-bottom:1px solid rgba(255,255,255,.05);
+  opacity:0;transform:translateX(-18px);
+  transition:opacity .4s ease,transform .4s ease,background .2s;
+}
+.check-row:last-child{border-bottom:none}
+.check-row:hover{background:rgba(255,255,255,.02)}
+.check-row.visible{opacity:1;transform:none}
+.check-icon-box{
+  width:38px;height:38px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;
+}
+.check-icon-box.ok{background:rgba(0,255,136,.1);color:var(--green)}
+.check-icon-box.suspicious{background:rgba(255,214,10,.1);color:var(--yellow)}
+.check-icon-box.dangerous{background:rgba(255,71,87,.1);color:var(--red)}
+.check-body{display:flex;flex-direction:column;gap:3px;min-width:0}
+.check-name{font-size:.67rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.check-msg{font-size:.88rem;font-weight:500}
+.check-msg.ok{color:rgba(230,255,240,.85)}
+.check-msg.suspicious{color:rgba(255,240,150,.85)}
+.check-msg.dangerous{color:rgba(255,180,180,.85)}
+.sev-pill{font-size:.63rem;font-weight:700;letter-spacing:1px;padding:4px 12px;border-radius:999px;text-transform:uppercase;flex-shrink:0}
+.sev-pill.ok{background:rgba(0,255,136,.1);color:var(--green);border:1px solid rgba(0,255,136,.2)}
+.sev-pill.suspicious{background:rgba(255,214,10,.1);color:var(--yellow);border:1px solid rgba(255,214,10,.2)}
+.sev-pill.dangerous{background:rgba(255,71,87,.1);color:var(--red);border:1px solid rgba(255,71,87,.22)}
+/* BOTTOM PANEL */
+.bottom-panel{
+  background:rgba(255,255,255,.02);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.08);border-top:none;
+  border-radius:0 0 var(--r) var(--r);
+  padding:22px 24px;
+  display:grid;grid-template-columns:1fr 160px;gap:24px;align-items:start;
+}
+.risk-bar-top{display:flex;justify-content:space-between;font-size:.74rem;color:var(--muted2);margin-bottom:9px}
+.risk-bar-track{height:6px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden;margin-bottom:16px}
+.risk-bar-fill{height:100%;width:0;border-radius:999px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+.risk-bar-fill.safe{background:linear-gradient(90deg,var(--green),var(--green2));box-shadow:0 0 12px rgba(0,255,136,.35)}
+.risk-bar-fill.suspicious{background:linear-gradient(90deg,var(--yellow),var(--yellow2));box-shadow:0 0 12px rgba(255,214,10,.35)}
+.risk-bar-fill.dangerous{background:linear-gradient(90deg,var(--red),var(--red2));box-shadow:0 0 12px rgba(255,71,87,.35)}
+.verdict-note{font-size:.84rem;color:var(--muted2);line-height:1.7}
+.breakdown{display:flex;flex-direction:column;gap:10px;font-size:.72rem;color:var(--muted)}
+.bk-row{display:flex;align-items:center;gap:8px}
+.bk-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bk-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(0,255,136,.4)}
+.bk-dot.suspicious{background:var(--yellow);box-shadow:0 0 6px rgba(255,214,10,.4)}
+.bk-dot.dangerous{background:var(--red);box-shadow:0 0 6px rgba(255,71,87,.4)}
+.bk-count{margin-left:auto;font-weight:700;color:var(--text)}
+</style>
+
+<style>
+/* SECTIONS */
+.section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.section-title{
+  font-size:.7rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);
+  display:flex;align-items:center;gap:8px;
+}
+.section-title::before{content:'';display:block;width:3px;height:13px;background:var(--purple);border-radius:2px;flex-shrink:0}
+.clear-history-btn{
+  background:none;border:1px solid rgba(255,255,255,.07);color:var(--muted);
+  font-size:.73rem;cursor:pointer;padding:5px 12px;border-radius:6px;
+  font-family:'Inter',sans-serif;
+  transition:color .2s,background .2s,border-color .2s;
+}
+.clear-history-btn:hover{color:var(--red);background:rgba(255,71,87,.07);border-color:rgba(255,71,87,.2)}
+/* HISTORY */
+.history-section{margin-top:32px;animation:fadeUp .6s .35s ease both}
+#historyList{display:flex;flex-direction:column;gap:8px}
+.history-item{
+  background:rgba(255,255,255,.02);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.07);border-radius:var(--r3);
+  padding:13px 18px;display:flex;align-items:center;gap:12px;cursor:pointer;
+  transition:background .2s,border-color .2s,transform .18s;
+}
+.history-item:hover{
+  background:rgba(255,255,255,.04);
+  border-color:rgba(255,255,255,.12);
+  transform:translateX(4px);
+}
+.history-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.history-dot.safe{background:var(--green);box-shadow:0 0 8px rgba(0,255,136,.4)}
+.history-dot.suspicious{background:var(--yellow);box-shadow:0 0 8px rgba(255,214,10,.4)}
+.history-dot.dangerous{background:var(--red);box-shadow:0 0 8px rgba(255,71,87,.4)}
+.history-url{
+  flex:1;font-size:.82rem;color:var(--muted2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+}
+.history-verdict{font-size:.67rem;font-weight:700;letter-spacing:.5px;flex-shrink:0}
+.history-verdict.safe{color:var(--green)}
+.history-verdict.suspicious{color:var(--yellow)}
+.history-verdict.dangerous{color:var(--red)}
+.history-time{font-size:.67rem;color:var(--muted);flex-shrink:0}
+.no-history{
+  text-align:center;padding:32px;color:var(--muted);font-size:.85rem;
+  border:1px dashed rgba(255,255,255,.07);border-radius:var(--r3);
+}
+/* EXAMPLES */
+.examples-section{margin-top:32px;animation:fadeUp .6s .4s ease both}
+.examples-grid{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+.ex-chip{
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.08);border-radius:var(--r3);
+  padding:9px 15px;font-size:.78rem;cursor:pointer;color:var(--muted2);
+  font-family:'Inter',sans-serif;
+  transition:all .22s;display:flex;align-items:center;gap:7px;
+}
+.ex-chip:hover{
+  color:var(--cyan);border-color:rgba(0,212,255,.3);
+  background:rgba(0,212,255,.05);transform:translateY(-2px);
+  box-shadow:0 4px 16px rgba(0,212,255,.1);
+}
+.ex-chip.warn:hover{
+  color:var(--yellow);border-color:rgba(255,214,10,.3);
+  background:rgba(255,214,10,.05);box-shadow:0 4px 16px rgba(255,214,10,.08);
+}
+.ex-chip.bad:hover{
+  color:var(--red);border-color:rgba(255,71,87,.3);
+  background:rgba(255,71,87,.05);box-shadow:0 4px 16px rgba(255,71,87,.08);
+}
+/* FOOTER */
+footer{
+  text-align:center;margin-top:64px;padding-top:24px;
+  border-top:1px solid rgba(255,255,255,.06);
+  font-size:.75rem;color:var(--muted);animation:fadeUp .6s .5s ease both;
+  line-height:1.8;
+}
+footer span{color:var(--cyan)}
+/* KEYFRAMES */
+@keyframes fadeDown{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes shimmer{0%{background-position:0%}100%{background-position:300%}}
+@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.65)}}
+@keyframes toastIn{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
+@keyframes toastOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(32px)}}
+@keyframes dangerBorderPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,71,87,0)}50%{box-shadow:0 0 28px 3px rgba(255,71,87,.18)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+@keyframes countUp{from{transform:scale(1.3);opacity:0}to{transform:scale(1);opacity:1}}
+/* RESPONSIVE */
+@media(max-width:640px){
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+  .check-row{grid-template-columns:38px 1fr auto;padding:12px 16px;gap:10px}
+  .bottom-panel{grid-template-columns:1fr;gap:16px}
+  .verdict-banner{flex-direction:column;align-items:flex-start}
+  .history-time{display:none}
+  .input-row{flex-direction:column}
+  #scanBtn,#clearBtn{width:100%}
+}
+@media(max-width:400px){
+  .stats-bar{grid-template-columns:1fr 1fr}
+  .wrapper{padding:84px 14px 80px}
+  .input-card{padding:20px 16px}
+}
+</style>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <path d="M14 2L4 6V14C4 19.5 8.5 24.6 14 26C19.5 24.6 24 19.5 24 14V6L14 2Z" fill="rgba(0,212,255,0.15)" stroke="url(#sg)" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M10 14L12.5 16.5L18 11" stroke="#00d4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <defs><linearGradient id="sg" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse"><stop stop-color="#00d4ff"/><stop offset="1" stop-color="#7c6af7"/></linearGradient></defs>
+    </svg>
+    <span class="navbar-name">PhishGuard</span>
+  </div>
+  <div class="navbar-right">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <div class="version-tag">v2.0</div>
+  </div>
+</nav>
+
+<div id="toastBox"></div>
+
+<div class="wrapper">
+
+<!-- HERO -->
+<header>
+  <div class="logo-wrap">
+    <div class="logo-ring"></div>
+    <div class="logo-ring2"></div>
+    <div class="logo-ring3"></div>
+    <svg class="shield-svg" width="46" height="46" viewBox="0 0 46 46" fill="none">
+      <path d="M23 3L5 10V23C5 33 13 41.5 23 44C33 41.5 41 33 41 23V10L23 3Z"
+        fill="url(#shg)" opacity=".2"/>
+      <path d="M23 3L5 10V23C5 33 13 41.5 23 44C33 41.5 41 33 41 23V10L23 3Z"
+        stroke="url(#shg2)" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M16 23L20.5 27.5L30 18" stroke="#00d4ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <defs>
+        <linearGradient id="shg" x1="5" y1="3" x2="41" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#00d4ff"/><stop offset="1" stop-color="#7c6af7"/></linearGradient>
+        <linearGradient id="shg2" x1="5" y1="3" x2="41" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#00d4ff"/><stop offset="1" stop-color="#7c6af7"/></linearGradient>
+      </defs>
+    </svg>
+  </div>
+  <h1>PhishGuard</h1>
+  <div class="header-sub">
+    <span>AI-Powered Phishing Detection</span>
+    <div class="hdot"></div>
+    <span>12 Heuristic Checks</span>
+    <div class="hdot"></div>
+    <span>100% In-Browser</span>
+  </div>
+</header>
+
+<!-- STATS ROW -->
+<div class="stats-bar">
+  <div class="stat-card">
+    <span class="stat-num" id="statChecks">0</span>
+    <div class="stat-lbl">Security Checks</div>
+  </div>
+  <div class="stat-card">
+    <span class="stat-num" id="statScanned">0</span>
+    <div class="stat-lbl">URLs Scanned</div>
+  </div>
+  <div class="stat-card">
+    <span class="stat-num rn" id="statFlagged">0</span>
+    <div class="stat-lbl">Threats Found</div>
+  </div>
+  <div class="stat-card">
+    <span class="stat-num gn" id="statSafe">0</span>
+    <div class="stat-lbl">Clean URLs</div>
+  </div>
+</div>
+
+<!-- SCAN CARD -->
+<div class="input-card">
+  <div class="input-lbl">Scan a URL for Phishing Threats</div>
+  <div class="input-row">
+    <div class="input-wrap">
+      <span class="input-icon">🔒</span>
+      <input id="urlInput" type="text" placeholder="https://enter-any-url-to-scan.com" autocomplete="off" spellcheck="false"/>
+    </div>
+    <button id="scanBtn" onclick="startScan()">⚡ Scan URL</button>
+    <button id="clearBtn" onclick="clearInput()" title="Clear input">✕</button>
+  </div>
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-top">
+      <span id="stepLabel">Initialising...</span>
+      <span id="stepPct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="scan-steps" id="scanSteps"></div>
+  </div>
+</div>
+
+<!-- RESULTS SECTION -->
+<div id="results">
+  <div class="verdict-banner" id="verdictBanner">
+    <div class="verdict-left">
+      <div class="verdict-label">Scan Result</div>
+      <div class="verdict-title" id="verdictTitle"></div>
+      <div class="verdict-url">
+        <span id="displayUrl" class="verdict-url-text"></span>
+        <button class="copy-btn" onclick="copyUrl()" id="copyBtn">Copy URL</button>
+      </div>
+    </div>
+    <div class="verdict-score-circle">
+      <svg class="score-ring-svg" viewBox="0 0 92 92">
+        <circle class="score-ring-bg" cx="46" cy="46" r="40"/>
+        <circle class="score-ring-fill" id="scoreRing" cx="46" cy="46" r="40"
+          stroke-dasharray="251.33" stroke-dashoffset="251.33"/>
+      </svg>
+      <span class="score-inner-num" id="scoreNum">0</span>
+      <span class="score-inner-lbl">RISK</span>
+    </div>
+  </div>
+  <div class="checks-wrap" id="checksList"></div>
+  <div class="bottom-panel">
+    <div>
+      <div class="risk-bar-top">
+        <span>Risk Level</span>
+        <span id="riskPct">0%</span>
+      </div>
+      <div class="risk-bar-track"><div class="risk-bar-fill" id="riskFill"></div></div>
+      <div class="verdict-note" id="verdictNote"></div>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+  </div>
+</div>
+
+<!-- EXAMPLES SECTION -->
+<div class="examples-section">
+  <div class="section-hdr">
+    <div class="section-title">Quick Test Examples</div>
+  </div>
+  <div class="examples-grid">
+    <div class="ex-chip" onclick="tryUrl('https://google.com')">✓ google.com</div>
+    <div class="ex-chip" onclick="tryUrl('https://github.com')">✓ github.com</div>
+    <div class="ex-chip" onclick="tryUrl('https://paypal.com')">✓ paypal.com</div>
+    <div class="ex-chip" onclick="tryUrl('https://microsoft.com')">✓ microsoft.com</div>
+    <div class="ex-chip warn" onclick="tryUrl('http://bit.ly/free-prize')">⚠ URL Shortener</div>
+    <div class="ex-chip bad" onclick="tryUrl('http://192.168.1.1/admin')">⚠ IP-Based URL</div>
+    <div class="ex-chip bad" onclick="tryUrl('http://paypa1-login.com/verify')">⚠ Homoglyph Attack</div>
+    <div class="ex-chip bad" onclick="tryUrl('https://secure-paypal-login-verify.com')">⚠ Brand+Keywords</div>
+    <div class="ex-chip bad" onclick="tryUrl('http://amazon-security-alert.com/update')">⚠ Blacklisted Domain</div>
+    <div class="ex-chip bad" onclick="tryUrl('http://fakebank-login-secure-verify.xyz/reset')">⚠ Risky TLD + Fake</div>
+    <div class="ex-chip bad" onclick="tryUrl('https://paypal.evil-hacker.com/login')">⚠ Subdomain Spoof</div>
+    <div class="ex-chip bad" onclick="tryUrl('http://known-phishing-site.com')">⚠ Known Phishing</div>
+  </div>
+</div>
+
+<!-- HISTORY SECTION -->
+<div class="history-section">
+  <div class="section-hdr">
+    <div class="section-title">Scan History</div>
+    <button class="clear-history-btn" onclick="clearHistory()">Clear All</button>
+  </div>
+  <div id="historyList">
+    <div class="no-history">No scans yet — enter a URL above to get started</div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <span>PhishGuard</span> &nbsp;·&nbsp; 12 Heuristic Checks &nbsp;·&nbsp; Pure JavaScript &nbsp;·&nbsp; <span>No data leaves your browser</span>
+  <br>
+  Built for educational purposes · Always verify with professional security tools
+</footer>
+
+</div><!-- /wrapper -->
+
+<script>
+/* ===== CANVAS PARTICLE NETWORK ===== */
+(function(){
+  const c=document.getElementById('canvas'),ctx=c.getContext('2d');
+  let W,H,pts=[];
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight}
+  function mkPt(){return{x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.5+.3,dx:(Math.random()-.5)*.32,dy:(Math.random()-.5)*.32,a:Math.random()*.45+.1}}
+  function init(){resize();pts=Array.from({length:120},mkPt)}
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    pts.forEach(p=>{
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,212,255,'+p.a+')';ctx.fill();
+      p.x+=p.dx;p.y+=p.dy;
+      if(p.x<0||p.x>W)p.dx*=-1;
+      if(p.y<0||p.y>H)p.dy*=-1;
+    });
+    for(let i=0;i<pts.length;i++){
+      for(let j=i+1;j<pts.length;j++){
+        const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<115){
+          ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);
+          ctx.strokeStyle='rgba(0,212,255,'+(.08*(1-d/115))+')';
+          ctx.lineWidth=.4;ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize',()=>{resize();pts=Array.from({length:120},mkPt)});
+  init();draw();
+})();
+
+/* ===== TOAST SYSTEM ===== */
+function toast(msg,type,dur){
+  type=type||'ok';dur=dur||3200;
+  const box=document.getElementById('toastBox');
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.innerHTML='<div class="toast-dot"></div><span>'+escHtml(msg)+'</span>';
+  box.appendChild(t);
+  setTimeout(()=>{t.classList.add('hide');setTimeout(()=>t.remove(),380)},dur);
+}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+/* ===== DATA SETS ===== */
+const BLACKLIST=new Set(["paypal-secure-login.com","paypa1.com","appleid-verify.com","secure-bankofamerica.com","amazon-security-alert.com","facebook-login-verify.com","google-account-recovery.net","microsoft-support-alert.com","netflix-billing-update.com","instagram-verify-account.com","known-phishing-site.com","login-paypal.com","secure-login-amazon.com","bankofamerica-verify.net","wellsfargo-secure.com","chase-alert-security.com","irs-tax-refund.com","dhl-package-tracking.net","fedex-delivery-alert.com","crypto-wallet-verify.com","binance-secure-login.net","coinbase-alert.com","steam-free-items.com","roblox-free-robux.com","paypa1-login.com","accounts-google.com","apple-id-unlock.com","amazon-prime-cancel.com","netflix-account-hold.com","microsoft-refund.com","paypal-resolution-center.com","signin-amazon.com","fb-login-secure.com","verify-your-paypal.com","update-billing-netflix.com","support-apple-id.com","google-warning-alert.com","secure-chase-bank.com","wellsfargo-alert.com","irs-gov-refund.com","usps-delivery-fail.com","fedex-missed-delivery.com","dhl-tracking-update.com"]);
+const SHORTENERS=new Set(["bit.ly","tinyurl.com","t.co","goo.gl","ow.ly","is.gd","buff.ly","adf.ly","short.link","tiny.cc","rb.gy","cutt.ly","shorturl.at","bl.ink","clck.ru"]);
+const RISKY_TLDS=new Set(["xyz","tk","ml","ga","cf","gq","top","work","click","loan","date","stream","download","racing","review","bid","trade","accountant","science","faith","party","cricket","win","space","online","site","website","tech","buzz","club","info","biz"]);
+const LEGITIMATE={google:["com","net","org","co"],paypal:["com","net"],apple:["com","net"],amazon:["com","co"],facebook:["com","net"],microsoft:["com","net"],netflix:["com","net"],instagram:["com"],twitter:["com"],linkedin:["com"],dropbox:["com"],chase:["com"],bankofamerica:["com"],wellsfargo:["com"],ebay:["com","co"],steam:["com"],discord:["com","gg"],yahoo:["com","net"],coinbase:["com"],binance:["com"],robinhood:["com"],tiktok:["com"],snapchat:["com"],whatsapp:["com","net"],telegram:["org","me"],roblox:["com"],dhl:["com","de"],fedex:["com","net"],ups:["com"],usps:["com","gov"],irs:["gov"],citibank:["com"],icloud:["com"],outlook:["com"]};
+const BRANDS=Object.keys(LEGITIMATE).concat(["office365","crypto","wallet","bank","secure"]);
+const SUSPICIOUS_KW=["login","signin","sign-in","verify","secure","account","update","banking","confirm","password","support","alert","recover","validate","authenticate","credential","wallet","billing","payment","refund","invoice","tracking","delivery","security","access","unlock","suspended","limited","urgent","reset"];
+const GLYPH_MAP={"0":"o","1":"l","3":"e","4":"a","5":"s","6":"g","7":"t","8":"b","9":"g","@":"a","!":"i","|":"l","$":"s"};
+</script>
+
+<script>
+/* ===== HELPERS ===== */
+function normGlyph(s){
+  return s.replace(/vv/g,'w').replace(/[013456789@!|$]/g,c=>GLYPH_MAP[c]||c);
+}
+function getParts(h){
+  const p=h.split('.');
+  if(p.length<2)return{subs:[],sld:h,tld:''};
+  return{subs:p.slice(0,-2),sld:p[p.length-2],tld:p[p.length-1]};
+}
+function isLegit(sld,tld){
+  return LEGITIMATE[sld]&&LEGITIMATE[sld].indexOf(tld)>-1;
+}
+function isValidUrl(url){
+  try{const u=new URL(url);return(u.protocol==='http:'||u.protocol==='https:')&&u.hostname.length>0;}
+  catch(e){return false;}
+}
+function getHostname(url){
+  try{return new URL(url).hostname.toLowerCase().replace(/^www\./,'');}
+  catch(e){return '';}
+}
+
+/* ===== CHECK FUNCTIONS ===== */
+function checkIP(url){
+  const h=getHostname(url);
+  if(/^(\d{1,3}\.){3}\d{1,3}$/.test(h))
+    return{sev:'DANGEROUS',msg:'IP-based URL detected ('+h+') — hides real destination'};
+  return{sev:'OK',msg:'No IP-based URL — hostname looks normal'};
+}
+function checkHTTPS(url){
+  try{
+    if(new URL(url).protocol==='https:')return{sev:'OK',msg:'HTTPS active — connection is encrypted'};
+    return{sev:'SUSPICIOUS',msg:'No HTTPS — connection is unencrypted (HTTP)'};
+  }catch(e){return{sev:'SUSPICIOUS',msg:'Unable to determine protocol'};}
+}
+function checkLength(url){
+  const l=url.length;
+  if(l>100)return{sev:'DANGEROUS',msg:'URL is extremely long ('+l+' chars) — common obfuscation tactic'};
+  if(l>75)return{sev:'SUSPICIOUS',msg:'URL is suspiciously long ('+l+' chars)'};
+  return{sev:'OK',msg:'URL length is normal ('+l+' chars)'};
+}
+function checkShortener(url){
+  const h=getHostname(url);
+  if(SHORTENERS.has(h))return{sev:'SUSPICIOUS',msg:'URL shortener detected ('+h+') — real destination hidden'};
+  return{sev:'OK',msg:'No URL shortener service detected'};
+}
+function checkBlacklist(url){
+  const h=getHostname(url);
+  if(BLACKLIST.has(h))return{sev:'DANGEROUS',msg:'Domain matches phishing blacklist: '+h};
+  for(const b of BLACKLIST){if(h.endsWith('.'+b))return{sev:'DANGEROUS',msg:'Subdomain of blacklisted domain: '+b};}
+  return{sev:'OK',msg:'Domain not found in phishing blacklist'};
+}
+</script>
+
+<script>
+function checkDomain(url){
+  const raw=getHostname(url);
+  if(!raw)return{sev:'OK',msg:'Could not extract hostname'};
+  const hostname=raw;
+  const {subs,sld,tld}=getParts(hostname);
+  const nsld=normGlyph(sld);
+
+  // 1. Risky TLD
+  if(RISKY_TLDS.has(tld))
+    return{sev:'DANGEROUS',msg:'High-risk TLD (.'+tld+') — frequently abused for phishing'};
+
+  // 2. IDN / Punycode homograph
+  if(hostname.startsWith('xn--')||hostname.indexOf('.xn--')>-1)
+    return{sev:'DANGEROUS',msg:'IDN/homograph domain detected: '+hostname};
+
+  // 3. Whitelist: exact legit brand with no suspicious subdomains
+  if(isLegit(sld,tld)&&subs.length===0)
+    return{sev:'OK',msg:'Verified legitimate brand domain ('+hostname+')'};
+
+  // 4. Homoglyph / leet: normalised SLD matches a brand but real SLD differs
+  for(const b of Object.keys(LEGITIMATE)){
+    if(nsld===b&&sld!==b)
+      return{sev:'DANGEROUS',msg:"Homoglyph impersonation of '"+b+"' detected ("+sld+")"};
+  }
+
+  // 5. Brand + suspicious keyword combo in full hostname
+  for(const br of BRANDS){
+    const normHost=normGlyph(hostname);
+    if(normHost.indexOf(br)>-1||normGlyph(sld).indexOf(br)>-1){
+      for(const kw of SUSPICIOUS_KW){
+        if(hostname.indexOf(kw)>-1)
+          return{sev:'DANGEROUS',msg:"Brand '"+br+"' + keyword '"+kw+"' combo ("+hostname+")"};
+      }
+    }
+  }
+
+  // 6. Brand in SLD + digits in SLD
+  for(const b of Object.keys(LEGITIMATE)){
+    if(nsld.indexOf(b)>-1&&/\d/.test(sld))
+      return{sev:'DANGEROUS',msg:"Lookalike domain with digits impersonating '"+b+"' ("+hostname+")"};
+  }
+
+  // 7. Brand in subdomain string + not a legit domain
+  const subsStr=subs.join('.');
+  for(const b of Object.keys(LEGITIMATE)){
+    if(subsStr.indexOf(b)>-1&&!isLegit(sld,tld))
+      return{sev:'DANGEROUS',msg:"Brand '"+b+"' hidden in subdomain of untrusted host ("+hostname+")"};
+  }
+
+  // 8. Too many subdomains
+  if(subs.length>=4)
+    return{sev:'SUSPICIOUS',msg:'Excessive subdomain depth ('+subs.length+' levels) — common evasion'};
+
+  // 9. Many hyphens in SLD
+  const hyphens=(sld.match(/-/g)||[]).length;
+  if(hyphens>=3)
+    return{sev:'SUSPICIOUS',msg:'Many hyphens in domain ('+sld+') — typical of fake domains'};
+
+  // 10. Brand embedded in SLD (not exact match)
+  for(const b of Object.keys(LEGITIMATE)){
+    if(nsld.indexOf(b)>-1&&nsld!==b)
+      return{sev:'SUSPICIOUS',msg:"Brand name '"+b+"' embedded in domain ("+sld+")"};
+  }
+
+  // 11. High-risk keyword in SLD
+  for(const kw of SUSPICIOUS_KW){
+    if(sld.indexOf(kw)>-1)
+      return{sev:'SUSPICIOUS',msg:"Suspicious keyword '"+kw+"' in domain name"};
+  }
+
+  // 12. Multiple hyphens + keyword in full hostname
+  if(hyphens>=2){
+    for(const kw of SUSPICIOUS_KW){
+      if(hostname.indexOf(kw)>-1)
+        return{sev:'SUSPICIOUS',msg:'Hyphens + suspicious keyword in hostname ('+hostname+')'};
+    }
+  }
+
+  return{sev:'OK',msg:'Domain structure appears normal'};
+}
+
+/* ===== SCORING ===== */
+const SEV_SCORE={OK:0,SUSPICIOUS:1,DANGEROUS:3};
+const MAX_SCORE=18;
+
+function scoreToVerdict(score){
+  if(score===0)return'SAFE';
+  if(score<=3)return'SUSPICIOUS';
+  return'DANGEROUS';
+}
+function verdictClass(v){return v==='SAFE'?'safe':v==='SUSPICIOUS'?'suspicious':'dangerous';}
+
+function runChecks(url){
+  return[
+    {name:'IP Address Check',   icon:'🌐', check:checkIP(url)},
+    {name:'HTTPS Protocol',     icon:'🔒', check:checkHTTPS(url)},
+    {name:'URL Length',         icon:'📏', check:checkLength(url)},
+    {name:'URL Shortener',      icon:'🔗', check:checkShortener(url)},
+    {name:'Phishing Blacklist', icon:'🚫', check:checkBlacklist(url)},
+    {name:'Domain Analysis',    icon:'🕵️', check:checkDomain(url)},
+  ];
+}
+</script>
+
+<script>
+/* ===== STATS ===== */
+let totalScanned=0,totalFlagged=0,totalSafe=0;
+const CHECKS_COUNT=6;
+
+function animateNum(el,target){
+  const start=parseInt(el.textContent)||0;
+  if(start===target)return;
+  const dur=600,s=performance.now();
+  function step(now){
+    const pct=Math.min((now-s)/dur,1);
+    const ease=1-Math.pow(1-pct,3);
+    el.textContent=Math.round(start+(target-start)*ease);
+    if(pct<1)requestAnimationFrame(step);
+    else el.textContent=target;
+  }
+  requestAnimationFrame(step);
+}
+function updateStats(){
+  animateNum(document.getElementById('statChecks'),CHECKS_COUNT);
+  animateNum(document.getElementById('statScanned'),totalScanned);
+  animateNum(document.getElementById('statFlagged'),totalFlagged);
+  animateNum(document.getElementById('statSafe'),totalSafe);
+}
+
+/* Init stat animation */
+setTimeout(()=>animateNum(document.getElementById('statChecks'),CHECKS_COUNT),400);
+
+/* ===== SCAN HISTORY ===== */
+let history=[];
+
+function addHistory(url,verdict){
+  const now=new Date();
+  const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  history.unshift({url,verdict,time});
+  if(history.length>10)history.pop();
+  renderHistory();
+}
+function renderHistory(){
+  const el=document.getElementById('historyList');
+  if(history.length===0){
+    el.innerHTML='<div class="no-history">No scans yet — enter a URL above to get started</div>';
+    return;
+  }
+  el.innerHTML=history.map((h,i)=>`
+    <div class="history-item" style="animation-delay:${i*40}ms" onclick="tryUrl('${escAttr(h.url)}')">
+      <div class="history-dot ${verdictClass(h.verdict)}"></div>
+      <div class="history-url" title="${escAttr(h.url)}">${escHtml(h.url)}</div>
+      <div class="history-verdict ${verdictClass(h.verdict)}">${h.verdict}</div>
+      <div class="history-time">${h.time}</div>
+    </div>
+  `).join('');
+}
+function clearHistory(){
+  history=[];renderHistory();toast('Scan history cleared','warn');
+}
+function escAttr(s){return s.replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+</script>
+
+<script>
+/* ===== SCAN FLOW ===== */
+let scanning=false;
+let lastScannedUrl='';
+
+const STEP_LABELS=[
+  'Resolving hostname',
+  'Checking blacklist',
+  'Analysing domain structure',
+  'Verifying HTTPS',
+  'Detecting shorteners',
+  'Computing risk score',
+  'Building report',
+];
+
+function randDelay(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+async function startScan(){
+  if(scanning)return;
+  const input=document.getElementById('urlInput');
+  let url=input.value.trim();
+
+  // Auto-prefix if missing scheme
+  if(url&&!url.startsWith('http://') && !url.startsWith('https://')){
+    url='https://'+url;
+  }
+
+  if(!url||!isValidUrl(url)){
+    input.classList.add('shake');
+    setTimeout(()=>input.classList.remove('shake'),450);
+    toast('Please enter a valid URL (e.g. https://example.com)','err');
+    return;
+  }
+
+  scanning=true;
+  lastScannedUrl=url;
+  const scanBtn=document.getElementById('scanBtn');
+  const progressWrap=document.getElementById('progressWrap');
+  const progressFill=document.getElementById('progressFill');
+  const stepLabel=document.getElementById('stepLabel');
+  const stepPct=document.getElementById('stepPct');
+  const stepsEl=document.getElementById('scanSteps');
+  const results=document.getElementById('results');
+
+  scanBtn.disabled=true;
+  results.style.display='none';
+  progressWrap.classList.add('active');
+
+  // Build step pills
+  stepsEl.innerHTML=STEP_LABELS.map((l,i)=>
+    `<div class="step-pill" id="pill${i}">${l}</div>`
+  ).join('');
+
+  // Animate steps
+  const total=STEP_LABELS.length;
+  for(let i=0;i<total;i++){
+    const pill=document.getElementById('pill'+i);
+    pill.classList.add('active');
+    stepLabel.textContent=STEP_LABELS[i]+'…';
+    const pct=Math.round(((i+0.5)/total)*100);
+    progressFill.style.width=pct+'%';
+    stepPct.textContent=pct+'%';
+    await sleep(randDelay(160,340));
+    pill.classList.remove('active');
+    pill.classList.add('done');
+    pill.textContent='✓ '+STEP_LABELS[i];
+  }
+  progressFill.style.width='100%';
+  stepPct.textContent='100%';
+  stepLabel.textContent='Analysis complete';
+
+  await sleep(180);
+
+  // Run all checks
+  const checks=runChecks(url);
+  let totalScore=0;
+  checks.forEach(c=>{totalScore+=SEV_SCORE[c.check.sev];});
+  const verdict=scoreToVerdict(totalScore);
+  const vc=verdictClass(verdict);
+  const riskPct=Math.min(Math.round((totalScore/MAX_SCORE)*100),100);
+
+  // Update global stats
+  totalScanned++;
+  if(verdict!=='SAFE')totalFlagged++;else totalSafe++;
+  updateStats();
+
+  // Add to history
+  addHistory(url,verdict);
+
+  // Render results
+  renderResults(url,checks,verdict,vc,totalScore,riskPct);
+
+  // Show toast
+  const toastMsgMap={SAFE:'✅ URL appears safe',SUSPICIOUS:'⚠️ URL looks suspicious',DANGEROUS:'🚨 Dangerous URL detected!'};
+  const toastTypeMap={SAFE:'ok',SUSPICIOUS:'warn',DANGEROUS:'err'};
+  toast(toastMsgMap[verdict],toastTypeMap[verdict]);
+
+  progressWrap.classList.remove('active');
+  scanBtn.disabled=false;
+  scanning=false;
+}
+</script>
+
+<script>
+/* ===== RENDER RESULTS ===== */
+function renderResults(url,checks,verdict,vc,score,riskPct){
+  const results=document.getElementById('results');
+  const banner=document.getElementById('verdictBanner');
+  const titleEl=document.getElementById('verdictTitle');
+  const displayUrl=document.getElementById('displayUrl');
+  const scoreRing=document.getElementById('scoreRing');
+  const scoreNum=document.getElementById('scoreNum');
+  const checksList=document.getElementById('checksList');
+  const riskFill=document.getElementById('riskFill');
+  const riskPctEl=document.getElementById('riskPct');
+  const verdictNote=document.getElementById('verdictNote');
+  const breakdown=document.getElementById('breakdown');
+
+  // Verdict banner
+  banner.className='verdict-banner '+vc;
+  titleEl.className='verdict-title '+vc;
+  const emojiMap={safe:'✅ SAFE',suspicious:'⚠️ SUSPICIOUS',dangerous:'🚨 DANGEROUS'};
+  titleEl.textContent=emojiMap[vc];
+  displayUrl.textContent=url.length>60?url.substring(0,57)+'…':url;
+  displayUrl.title=url;
+
+  // Score ring — circumference = 2*π*40 ≈ 251.33
+  const circ=251.33;
+  const fillFraction=Math.min(score/MAX_SCORE,1);
+  const offset=circ-(circ*fillFraction);
+  scoreRing.className='score-ring-fill '+vc;
+  scoreRing.style.strokeDashoffset=circ; // reset
+  scoreNum.textContent=score;
+  setTimeout(()=>{scoreRing.style.strokeDashoffset=offset;},80);
+
+  // Checks table
+  const iconsMap={OK:'✓',SUSPICIOUS:'⚠',DANGEROUS:'✕'};
+  checksList.innerHTML=checks.map((c,i)=>`
+    <div class="check-row" id="cr${i}" style="transition-delay:${i*70}ms">
+      <div class="check-icon-box ${c.check.sev.toLowerCase()}">${c.icon}</div>
+      <div class="check-body">
+        <div class="check-name">${escHtml(c.name)}</div>
+        <div class="check-msg ${c.check.sev.toLowerCase()}">${escHtml(c.check.msg)}</div>
+      </div>
+      <div class="sev-pill ${c.check.sev.toLowerCase()}">${iconsMap[c.check.sev]||''} ${c.check.sev}</div>
+    </div>
+  `).join('');
+
+  // Breakdown counts
+  const okCount=checks.filter(c=>c.check.sev==='OK').length;
+  const suspCount=checks.filter(c=>c.check.sev==='SUSPICIOUS').length;
+  const danCount=checks.filter(c=>c.check.sev==='DANGEROUS').length;
+  breakdown.innerHTML=`
+    <div class="bk-row"><div class="bk-dot ok"></div><span>Clean</span><span class="bk-count">${okCount}</span></div>
+    <div class="bk-row"><div class="bk-dot suspicious"></div><span>Suspicious</span><span class="bk-count">${suspCount}</span></div>
+    <div class="bk-row"><div class="bk-dot dangerous"></div><span>Dangerous</span><span class="bk-count">${danCount}</span></div>
+  `;
+
+  // Risk bar
+  riskFill.className='risk-bar-fill '+vc;
+  riskFill.style.width='0%';
+  riskPctEl.textContent=riskPct+'%';
+  setTimeout(()=>{riskFill.style.width=riskPct+'%';},100);
+
+  // Verdict note
+  const notes={
+    safe:'This URL passed all security checks. The domain appears to be legitimate and uses HTTPS. Still exercise caution with any URL — always verify the source.',
+    suspicious:'This URL raised some concerns. It may be a URL shortener hiding the real destination, using HTTP, or have structural patterns common in phishing. Proceed with caution.',
+    dangerous:'This URL has been flagged as highly dangerous. It matches known phishing patterns including blacklisted domains, homoglyph attacks, suspicious brand+keyword combos, or risky TLDs. Do NOT visit this URL.',
+  };
+  verdictNote.textContent=notes[vc];
+
+  // Show results
+  results.style.display='block';
+
+  // Stagger check rows visible
+  setTimeout(()=>{
+    checks.forEach((_,i)=>{
+      setTimeout(()=>{
+        const row=document.getElementById('cr'+i);
+        if(row)row.classList.add('visible');
+      },i*80);
+    });
+  },120);
+
+  // Scroll into view
+  setTimeout(()=>results.scrollIntoView({behavior:'smooth',block:'start'}),200);
+}
+
+/* ===== UTILITY ACTIONS ===== */
+function clearInput(){
+  document.getElementById('urlInput').value='';
+  document.getElementById('urlInput').focus();
+  document.getElementById('progressWrap').classList.remove('active');
+  document.getElementById('results').style.display='none';
+}
+
+function tryUrl(url){
+  document.getElementById('urlInput').value=url;
+  window.scrollTo({top:0,behavior:'smooth'});
+  setTimeout(()=>startScan(),150);
+}
+
+function copyUrl(){
+  if(!lastScannedUrl)return;
+  navigator.clipboard.writeText(lastScannedUrl).then(()=>{
+    toast('URL copied to clipboard','ok',2000);
+    const btn=document.getElementById('copyBtn');
+    if(btn){btn.textContent='Copied!';setTimeout(()=>{btn.textContent='Copy URL';},2000);}
+  }).catch(()=>{
+    toast('Could not copy — try manually','warn');
+  });
+}
+
+/* ===== KEYBOARD ===== */
+document.getElementById('urlInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter')startScan();
+});
+</script>
+
+</body>
+</html>
